@@ -1,2 +1,3 @@
-# goHornbillDocumentImport
-The utility provides a simple, safe and secure way to bulk-import documents into Hornbill Document Manager.
+# Hornbill Document Manager Document Import Tool - [GO](https://golang.org/)
+
+Please see [the Hownbill Wiki](https://wiki.hornbill.com/index.php/Document_Import_Tool) for instructions.

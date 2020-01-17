@@ -1,0 +1,4 @@
+Filepath,URN,Read,ModifyContent,ModifyMetaData
+//Users/userid/Documents/Some PDF File.pdf,urn:lib:library:8d8da0c4-27ab-4c05-8dde-646104a4f4cb,true,true,true
+//Users/userid/Documents/Some PDF File.pdf,urn:sys:user:admin,true,true,false
+"//Users/userid/Documents/Some Excel File, with a comma.xlsx",urn:lib:library:8d8da0c4-27ab-4c05-8dde-646104a4f4cb,true,false,false
