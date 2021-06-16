@@ -1,3 +1,3 @@
-Filepath,Title,Status,Description,ReviewDate,VersioningEnabled
-//Users/userid/Documents/Some PDF File.pdf,,active,"The decription of this PDF, with a comma",2020-01-28,true
-"//Users/userid/Documents/Some Excel File, with a comma.xlsx",Example File Title,active,The description of this XMLX file,,false
+Filepath,Title,Status,Description,ReviewDate,VersioningEnabled,Owner
+//Users/userid/Documents/Some PDF File.pdf,,active,"The decription of this PDF, with a comma",2020-01-28,true,alanc
+"//Users/userid/Documents/Some Excel File, with a comma.xlsx",Example File Title,active,The description of this XMLX file,,false,annab

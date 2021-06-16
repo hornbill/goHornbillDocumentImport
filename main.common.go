@@ -13,13 +13,6 @@ func logInfo(s string, outputToCLI bool) {
 	}
 }
 
-func logWarn(s string, outputToCLI bool) {
-	logFile.Warn(s)
-	if outputToCLI {
-		logStdOut.Warn(s)
-	}
-}
-
 func logError(s string, outputToCLI bool) {
 	logFile.Error(s)
 	if outputToCLI {

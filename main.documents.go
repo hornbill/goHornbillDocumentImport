@@ -34,13 +34,18 @@ func processDocuments() {
 		counters.session.addSuccess++
 
 		//documentAdd API to create doc from session file
-		err = documentAdd(&file)
+		docID, err := documentAdd(&file)
 		if err != nil {
 			logError(err.Error(), true)
 			counters.documents.addFailed++
 		} else {
 			counters.documents.addSuccess++
-
+			if file.Owner != "" {
+				err = documentSetOwner(docID, file.Owner)
+				if err != nil {
+					logError(err.Error(), true)
+				}
+			}
 			//Process Collections
 			if _, ok := csvCollections[file.Filepath]; ok {
 				for _, collectionID := range csvCollections[file.Filepath] {
@@ -157,8 +162,9 @@ func deleteFileFromSession(file *csvStruct) error {
 	return nil
 }
 
-func documentAdd(file *csvStruct) error {
+func documentAdd(file *csvStruct) (string, error) {
 	logInfo("Creating Document "+file.Title, false)
+	docID := ""
 	espXmlmc.SetParam("title", file.Title)
 	if file.Description != "" {
 		espXmlmc.SetParam("description", file.Description)
@@ -177,15 +183,47 @@ func documentAdd(file *csvStruct) error {
 	espXmlmc.CloseElement("serverFile")
 
 	//-- Check for Dry Run
-	if flags.configDryRun != true {
+	if !flags.configDryRun {
 		logDebug("[library::documentAdd] "+espXmlmc.GetParam(), false)
 		XMLResponse, err := espXmlmc.Invoke("library", "documentAdd")
 		if err != nil {
-			return err
+			return docID, err
 		}
 		logDebug("[RESPONSE] "+flattenXML(XMLResponse), false)
 		var xmlmcResponse xmlmcResponseStruct
 
+		err = xml.Unmarshal([]byte(XMLResponse), &xmlmcResponse)
+		if err != nil {
+			return docID, err
+		}
+		if xmlmcResponse.MethodResult != "ok" {
+			return docID, errors.New(xmlmcResponse.State.ErrorRet)
+		}
+		file.DocumentID = xmlmcResponse.DocumentID
+		file.ActivityStreamID = xmlmcResponse.ActivityStreamID
+		logInfo("Document "+file.DocumentID+" Created Successfully", false)
+		docID = file.DocumentID
+	} else {
+		logInfo("[DRYRUN] library::documentAdd:"+espXmlmc.GetParam(), false)
+		espXmlmc.ClearParam()
+	}
+	return docID, nil
+}
+func documentSetOwner(documentID, owner string) error {
+	logInfo("Setting Owner "+owner+" against Document "+documentID, false)
+	espXmlmc.SetParam("documentId", documentID)
+	espXmlmc.SetParam("owner", "urn:sys:user:"+owner)
+	espXmlmc.SetParam("reason", "Owner set during import process")
+	//-- Check for Dry Run
+	if !flags.configDryRun {
+		logDebug("[library::documentChangeOwner] "+espXmlmc.GetParam(), false)
+		XMLResponse, err := espXmlmc.Invoke("library", "documentChangeOwner")
+		logDebug("[RESPONSE] "+flattenXML(XMLResponse), false)
+		if err != nil {
+			return err
+		}
+
+		var xmlmcResponse xmlmcResponseStruct
 		err = xml.Unmarshal([]byte(XMLResponse), &xmlmcResponse)
 		if err != nil {
 			return err
@@ -193,11 +231,9 @@ func documentAdd(file *csvStruct) error {
 		if xmlmcResponse.MethodResult != "ok" {
 			return errors.New(xmlmcResponse.State.ErrorRet)
 		}
-		file.DocumentID = xmlmcResponse.DocumentID
-		file.ActivityStreamID = xmlmcResponse.ActivityStreamID
-		logInfo("Document "+file.DocumentID+" Created Successfully", false)
+		logInfo("Document Owner Set Successfully", false)
 	} else {
-		logInfo("[DRYRUN] library::documentAdd:"+espXmlmc.GetParam(), false)
+		logInfo("[DRYRUN] library::documentChangeOwner:"+espXmlmc.GetParam(), false)
 		espXmlmc.ClearParam()
 	}
 	return nil
@@ -208,7 +244,7 @@ func addToCollection(documentID string, collectionID int) error {
 	espXmlmc.SetParam("collectionId", strconv.Itoa(collectionID))
 	espXmlmc.SetParam("documentId", documentID)
 	//-- Check for Dry Run
-	if flags.configDryRun != true {
+	if !flags.configDryRun {
 		logDebug("[apps/com.hornbill.docmanager/Collection::addToCollection] "+espXmlmc.GetParam(), false)
 		XMLResponse, err := espXmlmc.Invoke("apps/com.hornbill.docmanager/Collection", "addToCollection")
 		if err != nil {
@@ -242,7 +278,7 @@ func shareDocument(documentID string, shareDetails sharesStruct) error {
 	espXmlmc.SetParam("modifyMetaData", strconv.FormatBool(shareDetails.ModifyMetaData))
 	espXmlmc.CloseElement("permissions")
 	//-- Check for Dry Run
-	if flags.configDryRun != true {
+	if !flags.configDryRun {
 		logDebug("[library::documentShare] "+espXmlmc.GetParam(), false)
 		XMLResponse, err := espXmlmc.Invoke("library", "documentShare")
 		if err != nil {
@@ -286,11 +322,18 @@ func findTag(tag string) (bool, int, error) {
 	logInfo("Searching For Tag: "+tag, false)
 	tagID := 0
 	tagExists := false
+	if tagKey, ok := foundTags[tag]; ok {
+		logInfo("Tag Found In Cache: "+strconv.Itoa(tagKey), false)
+		return true, tagKey, nil
+	}
 	espXmlmc.SetParam("tagGroup", "urn:tagGroup:library")
-	espXmlmc.SetParam("nameFilter", tag)
+	//Escape backslash in tag
+	tagregex := regexp.MustCompile(`\\`)
+	tagSearch := tagregex.ReplaceAllString(tag, "\\\\")
+	espXmlmc.SetParam("nameFilter", tagSearch)
 
 	//-- Check for Dry Run
-	if flags.configDryRun != true {
+	if !flags.configDryRun {
 		logDebug("[library::tagGetList] "+espXmlmc.GetParam(), false)
 		XMLResponse, err := espXmlmc.Invoke("library", "tagGetList")
 		if err != nil {
@@ -307,10 +350,11 @@ func findTag(tag string) (bool, int, error) {
 			return tagExists, tagID, errors.New(xmlmcResponse.State.ErrorRet)
 		}
 		for _, v := range xmlmcResponse.TagsFound {
-			if strings.ToLower(v.Name) == strings.ToLower(tag) {
+			if strings.EqualFold(v.Name, tag) {
 				logInfo("Tag Found: "+strconv.Itoa(v.ID), false)
 				tagExists = true
 				tagID = v.ID
+				foundTags[tag] = v.ID
 			}
 		}
 		if !tagExists {
@@ -332,7 +376,7 @@ func addTag(tag string) (int, error) {
 	espXmlmc.CloseElement("tag")
 
 	//-- Check for Dry Run
-	if flags.configDryRun != true {
+	if !flags.configDryRun {
 		logDebug("[library::tagCreate] "+espXmlmc.GetParam(), false)
 		XMLResponse, err := espXmlmc.Invoke("library", "tagCreate")
 		if err != nil {
@@ -349,6 +393,7 @@ func addTag(tag string) (int, error) {
 			return tagID, errors.New(xmlmcResponse.State.ErrorRet)
 		}
 		tagID = xmlmcResponse.TagID
+		foundTags[tag] = tagID
 		logInfo("Tag Created Successfully: "+strconv.Itoa(tagID), false)
 	} else {
 		logInfo("[DRYRUN] library::tagCreate:"+espXmlmc.GetParam(), false)
@@ -363,7 +408,7 @@ func linkTag(documentID string, tagID int) error {
 	espXmlmc.SetParam("tagID", strconv.Itoa(tagID))
 	espXmlmc.SetParam("objectRefUrn", "urn:lib:document:"+documentID)
 	//-- Check for Dry Run
-	if flags.configDryRun != true {
+	if !flags.configDryRun {
 		logDebug("[library::tagLinkObject] "+espXmlmc.GetParam(), false)
 		XMLResponse, err := espXmlmc.Invoke("library", "tagLinkObject")
 		if err != nil {

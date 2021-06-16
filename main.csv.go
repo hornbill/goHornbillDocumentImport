@@ -24,6 +24,7 @@ func getCSVDocuments() {
 			Description:       line[3],
 			ReviewDate:        line[4],
 			VersioningEnabled: false,
+			Owner:             line[6],
 		}
 		versioningEnabled, err := strconv.ParseBool(line[5])
 		if err == nil {

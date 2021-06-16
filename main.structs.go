@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	version   = "1.0.0"
+	version   = "1.1.0"
 	logPrefix = "docimport"
 )
 
@@ -20,6 +20,7 @@ var (
 	flags          flagsStruct
 	logFile        = logrus.New()
 	logStdOut      = logrus.New()
+	foundTags      = make(map[string]int)
 )
 
 type counterStruct struct {
