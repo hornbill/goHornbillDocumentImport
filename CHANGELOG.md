@@ -5,6 +5,7 @@
 New:
 
 - Added support for setting an owner against an imported document
+- Added caching of created and found tags, so fewer API calls are required into your Hornbill instance 
 
 Fixed:
 
